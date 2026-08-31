@@ -1,0 +1,174 @@
+/**
+ * WORKOUT LOG — Google Sheets backend
+ * -------------------------------------------------
+ * Deploy this as a Web App (see setup steps in chat) and paste the
+ * resulting URL into the app's setup screen.
+ *
+ * It manages 3 sheets, created automatically on first run:
+ *   Days      | Day | Label
+ *   Exercises | Day | Exercise | Order
+ *   Logs      | Day | Exercise | LastWeight | LastReps | LastDate | PRWeight | PRReps | PRDate
+ */
+
+const SHEET_DAYS = 'Days';
+const SHEET_EXERCISES = 'Exercises';
+const SHEET_LOGS = 'Logs';
+
+function getSS() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function ensureSheets() {
+  const ss = getSS();
+
+  let daysSheet = ss.getSheetByName(SHEET_DAYS);
+  if (!daysSheet) {
+    daysSheet = ss.insertSheet(SHEET_DAYS);
+    daysSheet.appendRow(['Day', 'Label']);
+    for (let i = 1; i <= 7; i++) {
+      daysSheet.appendRow([i, 'Day ' + i]);
+    }
+  }
+
+  let exSheet = ss.getSheetByName(SHEET_EXERCISES);
+  if (!exSheet) {
+    exSheet = ss.insertSheet(SHEET_EXERCISES);
+    exSheet.appendRow(['Day', 'Exercise', 'Order']);
+  }
+
+  let logSheet = ss.getSheetByName(SHEET_LOGS);
+  if (!logSheet) {
+    logSheet = ss.insertSheet(SHEET_LOGS);
+    logSheet.appendRow(['Day', 'Exercise', 'LastWeight', 'LastReps', 'LastDate', 'PRWeight', 'PRReps', 'PRDate']);
+  }
+
+  // Clean up the default blank "Sheet1" Google creates automatically.
+  const sheet1 = ss.getSheetByName('Sheet1');
+  if (sheet1 && sheet1.getLastRow() === 0 && ss.getSheets().length > 3) {
+    ss.deleteSheet(sheet1);
+  }
+}
+
+function sheetToObjects(sheet) {
+  const values = sheet.getDataRange().getValues();
+  const headers = values.shift();
+  return values.map(row => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = row[i]);
+    return obj;
+  });
+}
+
+function jsonOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  ensureSheets();
+  const ss = getSS();
+  const days = sheetToObjects(ss.getSheetByName(SHEET_DAYS));
+  const exercises = sheetToObjects(ss.getSheetByName(SHEET_EXERCISES));
+  const logs = sheetToObjects(ss.getSheetByName(SHEET_LOGS));
+  return jsonOut({ ok: true, days, exercises, logs });
+}
+
+function doPost(e) {
+  ensureSheets();
+  const ss = getSS();
+
+  let body;
+  try {
+    body = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return jsonOut({ ok: false, error: 'Bad request body' });
+  }
+
+  const action = body.action;
+  const result = { ok: true };
+
+  if (action === 'renameDay') {
+    const sheet = ss.getSheetByName(SHEET_DAYS);
+    const values = sheet.getDataRange().getValues();
+    for (let i = 1; i < values.length; i++) {
+      if (Number(values[i][0]) === Number(body.day)) {
+        sheet.getRange(i + 1, 2).setValue(body.label);
+        break;
+      }
+    }
+
+  } else if (action === 'addExercise') {
+    const sheet = ss.getSheetByName(SHEET_EXERCISES);
+    const values = sheet.getDataRange().getValues();
+    let maxOrder = 0;
+    for (let i = 1; i < values.length; i++) {
+      if (Number(values[i][0]) === Number(body.day)) {
+        maxOrder = Math.max(maxOrder, Number(values[i][2]) || 0);
+      }
+    }
+    sheet.appendRow([body.day, body.name, maxOrder + 1]);
+
+  } else if (action === 'deleteExercise') {
+    const exSheet = ss.getSheetByName(SHEET_EXERCISES);
+    const exValues = exSheet.getDataRange().getValues();
+    for (let i = exValues.length - 1; i >= 1; i--) {
+      if (Number(exValues[i][0]) === Number(body.day) && exValues[i][1] === body.name) {
+        exSheet.deleteRow(i + 1);
+      }
+    }
+    const logSheet = ss.getSheetByName(SHEET_LOGS);
+    const logValues = logSheet.getDataRange().getValues();
+    for (let i = logValues.length - 1; i >= 1; i--) {
+      if (Number(logValues[i][0]) === Number(body.day) && logValues[i][1] === body.name) {
+        logSheet.deleteRow(i + 1);
+      }
+    }
+
+  } else if (action === 'logSet') {
+    const sheet = ss.getSheetByName(SHEET_LOGS);
+    const values = sheet.getDataRange().getValues();
+    let rowIndex = -1;
+    for (let i = 1; i < values.length; i++) {
+      if (Number(values[i][0]) === Number(body.day) && values[i][1] === body.exercise) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    const weight = Number(body.weight);
+    const reps = Number(body.reps);
+    const date = body.date;
+
+    let prWeight = weight;
+    let prReps = reps;
+    let prDate = date;
+    let isNewPR = true;
+
+    if (rowIndex > -1) {
+      const existing = sheet.getRange(rowIndex, 1, 1, 8).getValues()[0];
+      const existingPRWeight = Number(existing[5]) || 0;
+      const existingPRReps = Number(existing[6]) || 0;
+      const existingPRDate = existing[7];
+
+      if (weight > existingPRWeight) {
+        isNewPR = true; // heavier than ever before
+      } else if (weight === existingPRWeight && reps > existingPRReps) {
+        isNewPR = true; // same weight, more reps than ever before
+      } else {
+        isNewPR = false;
+        prWeight = existingPRWeight;
+        prReps = existingPRReps;
+        prDate = existingPRDate;
+      }
+
+      sheet.getRange(rowIndex, 1, 1, 8).setValues([[body.day, body.exercise, weight, reps, date, prWeight, prReps, prDate]]);
+    } else {
+      sheet.appendRow([body.day, body.exercise, weight, reps, date, prWeight, prReps, prDate]);
+    }
+
+    result.isNewPR = isNewPR;
+    result.pr = { weight: prWeight, reps: prReps, date: prDate };
+  }
+
+  return jsonOut(result);
+}
