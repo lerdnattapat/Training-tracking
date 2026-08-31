@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>LOG — บันทึกน้ำหนักยก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#17181B;
+    --surface:#1F2124;
+    --surface-raised:#26282C;
+    --text:#ECEAE5;
+    --text-dim:#8D8F94;
+    --accent:#E2542A;
+    --accent-dim:rgba(226,84,42,0.16);
+    --pr:#3FC98A;
+    --pr-dim:rgba(63,201,138,0.14);
+    --danger:#C4453A;
+    --border:#303236;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg); color:var(--text);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    overscroll-behavior-y:none;
+  }
+  #app{
+    max-width:480px; margin:0 auto; min-height:100dvh;
+    display:flex; flex-direction:column;
+    padding-top:var(--safe-top);
+  }
+  .display{ font-family:'Archivo',sans-serif; }
+  .screen{ display:none; flex-direction:column; flex:1; min-height:0; }
+  .screen.active{ display:flex; }
+
+  /* ---- top bar ---- */
+  .topbar{
+    display:flex; align-items:center; gap:12px;
+    padding:18px 20px 14px;
+    position:sticky; top:0; z-index:5;
+    background:linear-gradient(var(--bg) 70%, transparent);
+  }
+  .backbtn{
+    -webkit-appearance:none; appearance:none; border:none;
+    background:var(--surface); color:var(--text);
+    width:40px; height:40px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; flex-shrink:0;
+  }
+  .backbtn:active{ background:var(--surface-raised); }
+  .topbar h1{
+    font-size:19px; font-weight:700; margin:0;
+    line-height:1.2; letter-spacing:0.2px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .topbar .subtitle{ font-size:13px; color:var(--text-dim); margin-top:2px; }
+  .editbtn{
+    margin-left:auto; -webkit-appearance:none; border:none; background:none;
+    color:var(--accent); font-size:15px; font-weight:600; padding:8px;
+  }
+
+  /* ---- scrollable body ---- */
+  .body{ flex:1; overflow-y:auto; padding-bottom:calc(24px + var(--safe-bottom)); }
+
+  /* ---- HOME: day list ---- */
+  .home-hero{ padding:6px 20px 22px; }
+  .home-hero .kicker{ color:var(--accent); font-size:14px; font-weight:600; }
+  .home-hero h1{ font-family:'Archivo',sans-serif; font-weight:900; font-size:38px; line-height:1.02; margin:6px 0 8px; letter-spacing:-0.5px;}
+  .home-hero p{ color:var(--text-dim); font-size:14.5px; line-height:1.5; margin:0; max-width:34ch;}
+
+  .day-list{ display:flex; flex-direction:column; }
+  .day-row{
+    display:flex; align-items:center; gap:16px;
+    padding:18px 20px;
+    border-top:1px solid var(--border);
+    background:none; border-left:none; border-right:none; border-bottom:none;
+    width:100%; text-align:left; color:var(--text);
+  }
+  .day-list .day-row:last-child{ border-bottom:1px solid var(--border); }
+  .day-row:active{ background:var(--surface); }
+  .day-num{
+    font-family:'Archivo',sans-serif; font-weight:800; font-size:30px;
+    color:var(--accent); width:34px; flex-shrink:0;
+  }
+  .day-info{ flex:1; min-width:0; }
+  .day-label{ font-size:16.5px; font-weight:600; }
+  .day-meta{ font-size:13px; color:var(--text-dim); margin-top:2px; }
+  .day-chev{ color:var(--text-dim); font-size:20px; flex-shrink:0; }
+
+  /* ---- DAY screen: exercise list ---- */
+  .ex-list{ display:flex; flex-direction:column; padding:4px 0; }
+  .ex-row{
+    display:flex; align-items:center; gap:14px;
+    padding:16px 20px; border-top:1px solid var(--border);
+    background:none; border-left:none; border-right:none; border-bottom:none;
+    width:100%; text-align:left; color:var(--text);
+  }
+  .ex-list .ex-row:last-of-type{ border-bottom:1px solid var(--border); }
+  .ex-row:active{ background:var(--surface); }
+  .ex-info{ flex:1; min-width:0; }
+  .ex-name{ font-size:16px; font-weight:600; }
+  .ex-prev{ font-size:13px; color:var(--text-dim); margin-top:3px; }
+  .ex-chev{ color:var(--text-dim); font-size:20px; }
+  .ex-del{
+    -webkit-appearance:none; border:none; background:var(--danger); color:#fff;
+    width:30px; height:30px; border-radius:8px; font-size:16px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .add-row{
+    display:flex; align-items:center; gap:12px;
+    padding:16px 20px; margin-top:2px;
+  }
+  .add-row input{
+    flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text);
+    border-radius:10px; padding:12px 14px; font-size:16px; font-family:'Inter',sans-serif;
+  }
+  .add-row input::placeholder{ color:var(--text-dim); }
+  .add-row button{
+    -webkit-appearance:none; border:none; background:var(--accent); color:#fff;
+    padding:12px 16px; border-radius:10px; font-size:15px; font-weight:700; flex-shrink:0;
+  }
+
+  .empty-hint{ padding:28px 20px; color:var(--text-dim); font-size:14.5px; line-height:1.6; }
+
+  /* ---- EXERCISE screen ---- */
+  .stat-pair{ display:flex; gap:1px; margin:6px 20px 22px; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .stat-box{ flex:1; background:var(--surface); padding:16px; }
+  .stat-box + .stat-box{ border-left:1px solid var(--border); }
+  .stat-box .stat-label{ font-size:12.5px; color:var(--text-dim); font-weight:600; }
+  .stat-box .stat-value{ font-family:'Archivo',sans-serif; font-weight:800; font-size:26px; margin-top:6px; }
+  .stat-box .stat-sub{ font-size:12.5px; color:var(--text-dim); margin-top:3px; }
+  .stat-box.pr .stat-value{ color:var(--pr); }
+  .stat-box.pr{ background:var(--pr-dim); }
+
+  .field{ margin:0 20px 20px; }
+  .field-label{ font-size:14px; font-weight:600; color:var(--text-dim); margin-bottom:10px; }
+  .stepper{
+    display:flex; align-items:stretch; gap:10px;
+  }
+  .stepper button{
+    -webkit-appearance:none; border:none; background:var(--surface); color:var(--text);
+    width:52px; border-radius:12px; font-size:22px; font-weight:700; flex-shrink:0;
+  }
+  .stepper button:active{ background:var(--surface-raised); }
+  .stepper input{
+    flex:1; min-width:0; background:var(--surface); border:1px solid var(--border); color:var(--text);
+    border-radius:12px; text-align:center; font-family:'Archivo',sans-serif; font-weight:800;
+    font-size:30px; padding:8px 4px;
+  }
+  .stepper input:focus{ outline:2px solid var(--accent); border-color:var(--accent); }
+
+  .savebar{
+    padding:14px 20px calc(16px + var(--safe-bottom));
+    border-top:1px solid var(--border);
+    background:var(--bg);
+  }
+  .savebtn{
+    -webkit-appearance:none; border:none; width:100%; background:var(--accent); color:#fff;
+    padding:16px; border-radius:14px; font-size:17px; font-weight:700; font-family:'Inter',sans-serif;
+  }
+  .savebtn:active{ opacity:0.85; }
+  .savebtn:disabled{ opacity:0.5; }
+
+  .toast{
+    position:fixed; left:50%; bottom:calc(24px + var(--safe-bottom));
+    transform:translateX(-50%) translateY(20px); opacity:0;
+    background:var(--surface-raised); border:1px solid var(--border); color:var(--text);
+    padding:12px 20px; border-radius:12px; font-size:14.5px; font-weight:600;
+    transition:opacity 0.25s, transform 0.25s; z-index:50; white-space:nowrap;
+    display:flex; align-items:center; gap:8px;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast.pr{ border-color:var(--pr); color:var(--pr); }
+
+  /* ---- SETUP screen ---- */
+  .setup-wrap{ padding:28px 22px; flex:1; display:flex; flex-direction:column; justify-content:center; }
+  .setup-wrap .kicker{ color:var(--accent); font-size:14px; font-weight:600; }
+  .setup-wrap h1{ font-family:'Archivo',sans-serif; font-weight:900; font-size:30px; margin:8px 0 14px; }
+  .setup-wrap p{ color:var(--text-dim); font-size:14.5px; line-height:1.6; margin:0 0 22px; }
+  .setup-wrap label{ font-size:13.5px; font-weight:600; color:var(--text-dim); display:block; margin-bottom:8px; }
+  .setup-wrap input{
+    width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text);
+    border-radius:12px; padding:14px; font-size:15px; font-family:'Inter',sans-serif; margin-bottom:14px;
+  }
+  .setup-wrap .err{ color:var(--danger); font-size:13.5px; margin:-6px 0 14px; display:none; }
+
+  .loading{ flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:14.5px; padding:40px; text-align:center; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- SETUP -->
+  <section class="screen" id="screen-setup">
+    <div class="setup-wrap">
+      <div class="kicker">เริ่มต้นใช้งาน</div>
+      <h1>เชื่อมกับ Google Sheet</h1>
+      <p>วางลิงก์ Web App ที่ได้จากการ Deploy Google Apps Script (ดูขั้นตอนในแชท) แอปจะใช้ชีตนี้เป็นฐานข้อมูลเก็บสถิติทั้งหมด</p>
+      <label for="scripturl">Web App URL</label>
+      <input id="scripturl" type="url" placeholder="https://script.google.com/macros/s/xxxx/exec" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div class="err" id="setup-err">เชื่อมต่อไม่สำเร็จ ตรวจสอบลิงก์และการตั้งค่า deploy อีกครั้ง</div>
+      <button class="savebtn" id="setup-save">เชื่อมต่อ</button>
+    </div>
+  </section>
+
+  <!-- HOME -->
+  <section class="screen" id="screen-home">
+    <div class="body">
+      <div class="home-hero">
+        <div class="kicker">ตารางฝึก 7 วัน</div>
+        <h1 class="display">LOG</h1>
+        <p>เลือกวันที่จะเล่นวันนี้ แล้วบันทึกน้ำหนักแต่ละท่าไว้เทียบกับรอบก่อน</p>
+      </div>
+      <div class="day-list" id="day-list"></div>
+    </div>
+  </section>
+
+  <!-- DAY -->
+  <section class="screen" id="screen-day">
+    <div class="topbar">
+      <button class="backbtn" id="day-back">‹</button>
+      <div>
+        <h1 id="day-title">Day 1</h1>
+        <div class="subtitle" id="day-subtitle"></div>
+      </div>
+      <button class="editbtn" id="day-editbtn">แก้ไข</button>
+    </div>
+    <div class="body">
+      <div class="ex-list" id="ex-list"></div>
+      <div class="add-row">
+        <input id="new-ex-name" type="text" placeholder="ชื่อท่าใหม่ เช่น Bench Press" autocorrect="off">
+        <button id="new-ex-add">เพิ่ม</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXERCISE -->
+  <section class="screen" id="screen-exercise">
+    <div class="topbar">
+      <button class="backbtn" id="ex-back">‹</button>
+      <div>
+        <h1 id="exercise-title">ท่า</h1>
+        <div class="subtitle" id="exercise-day-label"></div>
+      </div>
+    </div>
+    <div class="body">
+      <div class="stat-pair">
+        <div class="stat-box">
+          <div class="stat-label">ครั้งก่อน</div>
+          <div class="stat-value" id="last-value">—</div>
+          <div class="stat-sub" id="last-sub">ยังไม่มีข้อมูล</div>
+        </div>
+        <div class="stat-box pr">
+          <div class="stat-label">สถิติสูงสุด</div>
+          <div class="stat-value" id="pr-value">—</div>
+          <div class="stat-sub" id="pr-sub">ยังไม่มีข้อมูล</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">น้ำหนัก (กก.)</div>
+        <div class="stepper">
+          <button id="weight-minus">−</button>
+          <input id="weight-input" type="number" inputmode="decimal" step="0.5" value="0">
+          <button id="weight-plus">+</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">จำนวนครั้ง (Reps)</div>
+        <div class="stepper">
+          <button id="reps-minus">−</button>
+          <input id="reps-input" type="number" inputmode="numeric" step="1" value="0">
+          <button id="reps-plus">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="savebar">
+      <button class="savebtn" id="save-set">บันทึก</button>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  var state = {
+    scriptUrl: null,
+    data: null,         // {days, exercises, logs}
+    currentDay: null,   // number 1-7
+    currentExercise: null, // string
+    dayEditMode: false
+  };
+
+  var CONFIG_KEY = 'scriptUrl';
+
+  var screens = {
+    setup: document.getElementById('screen-setup'),
+    home: document.getElementById('screen-home'),
+    day: document.getElementById('screen-day'),
+    exercise: document.getElementById('screen-exercise')
+  };
+
+  function showScreen(name){
+    Object.keys(screens).forEach(function(k){
+      screens[k].classList.toggle('active', k === name);
+    });
+  }
+
+  function showToast(msg, isPR){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isPR ? ' pr' : '');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+  }
+
+  function todayStr(){
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = String(d.getMonth()+1).padStart(2,'0');
+    var dd = String(d.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+dd;
+  }
+
+  function fmtDate(s){
+    if(!s) return '';
+    var d = new Date(s);
+    if(isNaN(d.getTime())) return String(s);
+    var months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    return d.getDate() + ' ' + months[d.getMonth()];
+  }
+
+  // ---------- API ----------
+  function apiGet(){
+    return fetch(state.scriptUrl, { method: 'GET' })
+      .then(function(r){ return r.json(); });
+  }
+
+  function apiPost(body){
+    return fetch(state.scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
+    }).then(function(r){ return r.json(); });
+  }
+
+  // ---------- data helpers ----------
+  function getDayLabel(day){
+    var row = state.data.days.find(function(d){ return Number(d.Day) === Number(day); });
+    return row ? row.Label : ('Day ' + day);
+  }
+
+  function getExercisesForDay(day){
+    return state.data.exercises
+      .filter(function(e){ return Number(e.Day) === Number(day); })
+      .sort(function(a,b){ return (Number(a.Order)||0) - (Number(b.Order)||0); })
+      .map(function(e){ return e.Exercise; });
+  }
+
+  function getLog(day, exercise){
+    return state.data.logs.find(function(l){
+      return Number(l.Day) === Number(day) && l.Exercise === exercise;
+    });
+  }
+
+  // ---------- render: HOME ----------
+  function renderHome(){
+    var list = document.getElementById('day-list');
+    list.innerHTML = '';
+    for(var i=1;i<=7;i++){
+      (function(day){
+        var label = getDayLabel(day);
+        var count = getExercisesForDay(day).length;
+        var row = document.createElement('button');
+        row.className = 'day-row';
+        row.innerHTML =
+          '<div class="day-num display">' + day + '</div>' +
+          '<div class="day-info">' +
+            '<div class="day-label" id="day-label-' + day + '">' + escapeHtml(label) + '</div>' +
+            '<div class="day-meta">' + (count ? (count + ' ท่า') : 'ยังไม่มีท่า') + '</div>' +
+          '</div>' +
+          '<div class="day-chev">›</div>';
+        row.addEventListener('click', function(){ openDay(day); });
+        list.appendChild(row);
+      })(i);
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  // ---------- render: DAY ----------
+  function openDay(day){
+    state.currentDay = day;
+    state.dayEditMode = false;
+    document.getElementById('day-editbtn').textContent = 'แก้ไข';
+    renderDay();
+    showScreen('day');
+  }
+
+  function renderDay(){
+    var day = state.currentDay;
+    var titleEl = document.getElementById('day-title');
+    titleEl.textContent = getDayLabel(day);
+    titleEl.onclick = function(){
+      var next = prompt('ตั้งชื่อวันนี้', getDayLabel(day));
+      if(next && next.trim()){
+        var row = state.data.days.find(function(d){ return Number(d.Day)===Number(day); });
+        if(row) row.Label = next.trim();
+        renderDay();
+        apiPost({ action:'renameDay', day: day, label: next.trim() });
+      }
+    };
+    document.getElementById('day-subtitle').textContent = 'วันที่ ' + day + ' จาก 7 · แตะชื่อเพื่อแก้ไข';
+
+    var exercises = getExercisesForDay(day);
+    var listEl = document.getElementById('ex-list');
+    listEl.innerHTML = '';
+
+    if(exercises.length === 0){
+      var hint = document.createElement('div');
+      hint.className = 'empty-hint';
+      hint.textContent = 'ยังไม่มีท่าในวันนี้ เพิ่มท่าแรกได้ด้านล่าง';
+      listEl.appendChild(hint);
+    }
+
+    exercises.forEach(function(name){
+      var log = getLog(day, name);
+      var row = document.createElement('div');
+      row.className = 'ex-row';
+      var prevText = (log && log.LastWeight) ? (log.LastWeight + ' กก. × ' + log.LastReps) : 'ยังไม่เคยเล่น';
+      row.innerHTML =
+        '<div class="ex-info">' +
+          '<div class="ex-name">' + escapeHtml(name) + '</div>' +
+          '<div class="ex-prev">ครั้งก่อน: ' + escapeHtml(prevText) + '</div>' +
+        '</div>' +
+        (state.dayEditMode ? '<button class="ex-del">×</button>' : '<div class="ex-chev">›</div>');
+      if(state.dayEditMode){
+        row.querySelector('.ex-del').addEventListener('click', function(ev){
+          ev.stopPropagation();
+          if(confirm('ลบท่า "' + name + '" ?')){
+            state.data.exercises = state.data.exercises.filter(function(e){
+              return !(Number(e.Day)===Number(day) && e.Exercise===name);
+            });
+            state.data.logs = state.data.logs.filter(function(l){
+              return !(Number(l.Day)===Number(day) && l.Exercise===name);
+            });
+            renderDay();
+            apiPost({ action:'deleteExercise', day: day, name: name });
+          }
+        });
+      } else {
+        row.addEventListener('click', function(){ openExercise(day, name); });
+      }
+      listEl.appendChild(row);
+    });
+  }
+
+  document.getElementById('day-back').addEventListener('click', function(){
+    renderHome();
+    showScreen('home');
+  });
+
+  document.getElementById('day-editbtn').addEventListener('click', function(){
+    state.dayEditMode = !state.dayEditMode;
+    document.getElementById('day-editbtn').textContent = state.dayEditMode ? 'เสร็จสิ้น' : 'แก้ไข';
+    renderDay();
+  });
+
+  document.getElementById('new-ex-add').addEventListener('click', function(){
+    var input = document.getElementById('new-ex-name');
+    var name = input.value.trim();
+    if(!name) return;
+    var day = state.currentDay;
+    var existingOrders = state.data.exercises
+      .filter(function(e){ return Number(e.Day)===Number(day); })
+      .map(function(e){ return Number(e.Order)||0; });
+    var order = existingOrders.length ? Math.max.apply(null, existingOrders)+1 : 1;
+    state.data.exercises.push({ Day: day, Exercise: name, Order: order });
+    input.value = '';
+    renderDay();
+    apiPost({ action:'addExercise', day: day, name: name });
+  });
+
+  // ---------- render: EXERCISE ----------
+  function openExercise(day, name){
+    state.currentDay = day;
+    state.currentExercise = name;
+    var log = getLog(day, name);
+
+    document.getElementById('exercise-title').textContent = name;
+    document.getElementById('exercise-day-label').textContent = getDayLabel(day);
+
+    if(log && log.LastWeight){
+      document.getElementById('last-value').textContent = log.LastWeight + ' × ' + log.LastReps;
+      document.getElementById('last-sub').textContent = fmtDate(log.LastDate);
+    } else {
+      document.getElementById('last-value').textContent = '—';
+      document.getElementById('last-sub').textContent = 'ยังไม่มีข้อมูล';
+    }
+
+    if(log && log.PRWeight){
+      document.getElementById('pr-value').textContent = log.PRWeight + ' × ' + log.PRReps;
+      document.getElementById('pr-sub').textContent = fmtDate(log.PRDate);
+    } else {
+      document.getElementById('pr-value').textContent = '—';
+      document.getElementById('pr-sub').textContent = 'ยังไม่มีข้อมูล';
+    }
+
+    document.getElementById('weight-input').value = log && log.LastWeight ? log.LastWeight : 0;
+    document.getElementById('reps-input').value = log && log.LastReps ? log.LastReps : 0;
+
+    showScreen('exercise');
+  }
+
+  document.getElementById('ex-back').addEventListener('click', function(){
+    renderDay();
+    showScreen('day');
+  });
+
+  function stepInput(id, delta, min){
+    var el = document.getElementById(id);
+    var v = parseFloat(el.value) || 0;
+    v = Math.max(min, Math.round((v + delta) * 100) / 100);
+    el.value = v;
+  }
+  document.getElementById('weight-plus').addEventListener('click', function(){ stepInput('weight-input', 2.5, 0); });
+  document.getElementById('weight-minus').addEventListener('click', function(){ stepInput('weight-input', -2.5, 0); });
+  document.getElementById('reps-plus').addEventListener('click', function(){ stepInput('reps-input', 1, 0); });
+  document.getElementById('reps-minus').addEventListener('click', function(){ stepInput('reps-input', -1, 0); });
+
+  document.getElementById('save-set').addEventListener('click', function(){
+    var day = state.currentDay;
+    var name = state.currentExercise;
+    var weight = parseFloat(document.getElementById('weight-input').value) || 0;
+    var reps = parseInt(document.getElementById('reps-input').value, 10) || 0;
+    var date = todayStr();
+    var btn = document.getElementById('save-set');
+    btn.disabled = true;
+    btn.textContent = 'กำลังบันทึก…';
+
+    apiPost({ action:'logSet', day: day, exercise: name, weight: weight, reps: reps, date: date })
+      .then(function(res){
+        var log = getLog(day, name);
+        if(!log){
+          log = { Day: day, Exercise: name };
+          state.data.logs.push(log);
+        }
+        log.LastWeight = weight; log.LastReps = reps; log.LastDate = date;
+        if(res && res.pr){
+          log.PRWeight = res.pr.weight; log.PRReps = res.pr.reps; log.PRDate = res.pr.date;
+        }
+        openExercise(day, name);
+        showToast(res && res.isNewPR ? 'บันทึกแล้ว — สถิติใหม่' : 'บันทึกแล้ว', res && res.isNewPR);
+      })
+      .catch(function(){
+        showToast('บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง', false);
+      })
+      .finally(function(){
+        btn.disabled = false;
+        btn.textContent = 'บันทึก';
+      });
+  });
+
+  // ---------- SETUP ----------
+  function loadApp(){
+    showScreen('home');
+    var homeBody = document.querySelector('#screen-home .body');
+    var loadingEl = document.createElement('div');
+    loadingEl.className = 'loading';
+    loadingEl.textContent = 'กำลังโหลดข้อมูลจาก Google Sheet…';
+    homeBody.appendChild(loadingEl);
+
+    apiGet().then(function(res){
+      if(!res || res.ok === false) throw new Error('bad response');
+      state.data = { days: res.days || [], exercises: res.exercises || [], logs: res.logs || [] };
+      renderHome();
+    }).catch(function(){
+      homeBody.innerHTML = '';
+      var err = document.createElement('div');
+      err.className = 'loading';
+      err.innerHTML = 'โหลดข้อมูลไม่สำเร็จ<br><br>ตรวจสอบลิงก์ Google Apps Script<br><br>';
+      var retry = document.createElement('button');
+      retry.className = 'savebtn';
+      retry.style.marginTop = '12px';
+      retry.textContent = 'ลองใหม่';
+      retry.addEventListener('click', loadApp);
+      err.appendChild(retry);
+      homeBody.appendChild(err);
+    });
+  }
+
+  window.storage.get(CONFIG_KEY, false).then(function(res){
+    if(res && res.value){
+      state.scriptUrl = res.value;
+      loadApp();
+    } else {
+      showScreen('setup');
+    }
+  }).catch(function(){
+    showScreen('setup');
+  });
+
+  document.getElementById('setup-save').addEventListener('click', function(){
+    var url = document.getElementById('scripturl').value.trim();
+    var errEl = document.getElementById('setup-err');
+    errEl.style.display = 'none';
+    if(!url || url.indexOf('http') !== 0){
+      errEl.textContent = 'กรุณาวางลิงก์ Web App ให้ถูกต้อง';
+      errEl.style.display = 'block';
+      return;
+    }
+    var btn = document.getElementById('setup-save');
+    btn.disabled = true;
+    btn.textContent = 'กำลังเชื่อมต่อ…';
+
+    var testUrl = url;
+    var prevUrl = state.scriptUrl;
+    state.scriptUrl = testUrl;
+
+    apiGet().then(function(res){
+      if(!res || res.ok === false) throw new Error('bad');
+      return window.storage.set(CONFIG_KEY, testUrl, false);
+    }).then(function(){
+      state.data = null;
+      loadApp();
+    }).catch(function(){
+      state.scriptUrl = prevUrl;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'เชื่อมต่อ';
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
